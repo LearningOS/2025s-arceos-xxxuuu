@@ -68,10 +68,7 @@ jobs:
           cat tmp.txt
           score=$(cat tmp.txt | tail -n1)
           echo $score
-
-          cat test.output
-
-          rm tmp.txt test.output -f
+          rm tmp.txt -f
           echo "basic_points=$score" >> $GITHUB_OUTPUT
 
   deploy:

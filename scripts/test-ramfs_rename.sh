@@ -18,10 +18,12 @@ make run A=exercises/ramfs_rename/ BLK=y > $tmp_file 2>/dev/null
 
 output=$(tail -n1 ./$tmp_file | grep -a "$grep_content")
 
+cat $tmp_file
+
 rm -rf $tmp_file 
 
 if [[ -z "$output" ]] ;then
-    echo "ramfs_rename fault"
+    echo "ramfs_rename default"
     exit 1
 else 
     echo "ramfs_rename pass"

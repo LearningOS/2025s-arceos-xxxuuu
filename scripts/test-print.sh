@@ -2,46 +2,26 @@
 
 cd arceos/ || exit
 
-rm pflash.img -f 
-rm disk.img -f
+# rm pflash.img -f 
+# rm disk.img -f
 
-make pflash_img
-make disk_img
+# make pflash_img
+# make disk_img
 
 
 make run A=exercises/print_with_color/ > a.txt 2>/dev/null
 
-context=$(tail -n 20 ./a.txt )
+output=$(grep -a "$(printf '\x1b')"  ./a.txt | grep "Hello, Arceos!"  ) || true
 
-has_color=false
-has_text=false
+# cat a.txt
+# echo "$output"
 
+rm a.txt -f
 
-if [[ "$context" == *$'\x1b['* ]]; then
-    echo "Has color"
-    has_color=true
-
-    sed_context=$(echo "$context" | sed 's/\x1b\[[0-9;]*m//g')
-
-    echo "$sed_context" > c.txt
-
-    if grep -q "Hello, Arceos!" c.txt ; then
-        echo "Has Hello, Arceos!"
-        has_text=true
-    else
-        echo "No Hello, Arceos!"
-    fi
-else
-    echo "No color"
-fi
-
-
-rm a.txt b.txt c.txt -f
-
-if [[ "$has_color" == true && "$has_text" == true ]]; then
+if [[ -z "$output" ]] ;then
+    echo "print_with_color default"
+    exit 1
+else 
     echo "print_with_color pass"
     exit 0
-else
-    echo "print_with_color fault"
-    exit 1
 fi
