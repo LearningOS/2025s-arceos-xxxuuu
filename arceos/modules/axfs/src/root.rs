@@ -70,14 +70,10 @@ impl RootDirectory {
         self.mounts.iter().any(|mp| mp.path == path)
     }
 
-    fn lookup_mounted_fs<F, T>(&self, path: &str, f: F) -> AxResult<T>
-    where
-        F: FnOnce(Arc<dyn VfsOps>, &str) -> AxResult<T>,
-    {
-        debug!("lookup at root: {}", path);
+    fn mnt_of_path<'a>(&self, path: &'a str) -> Option<(&'a str, usize)> {
         let path = path.trim_matches('/');
         if let Some(rest) = path.strip_prefix("./") {
-            return self.lookup_mounted_fs(rest, f);
+            return self.mnt_of_path(rest);
         }
 
         let mut idx = 0;
@@ -94,9 +90,24 @@ impl RootDirectory {
         }
 
         if max_len == 0 {
-            f(self.main_fs.clone(), path) // not matched any mount point
+            None // not matched any mount point
         } else {
-            f(self.mounts[idx].fs.clone(), &path[max_len..]) // matched at `idx`
+            Some((&path[max_len..], idx)) // matched at `idx`
+        }
+    }
+
+    fn lookup_mounted_fs<F, T>(&self, path: &str, f: F) -> AxResult<T>
+    where
+        F: FnOnce(Arc<dyn VfsOps>, &str) -> AxResult<T>,
+    {
+        debug!("lookup at root: {}", path);
+        match self.mnt_of_path(path) {
+            None => {
+                f(self.main_fs.clone(), path) // not matched any mount point
+            }
+            Some((path, idx)) => {
+                f(self.mounts[idx].fs.clone(), path) // matched at `idx`
+            }
         }
     }
 }
@@ -133,13 +144,22 @@ impl VfsNodeOps for RootDirectory {
     }
 
     fn rename(&self, src_path: &str, dst_path: &str) -> VfsResult {
-        self.lookup_mounted_fs(src_path, |fs, rest_path| {
-            if rest_path.is_empty() {
-                ax_err!(PermissionDenied) // cannot rename mount points
-            } else {
-                fs.root_dir().rename(rest_path, dst_path)
-            }
-        })
+        // check if is same mount point
+        let mnt_of_src = self.mnt_of_path(src_path);
+        let mnt_of_dst = self.mnt_of_path(dst_path);
+        if mnt_of_src.is_none() && mnt_of_dst.is_none() {
+            return self.main_fs.root_dir().rename(src_path, dst_path);
+        }
+        let Some((src_path, src_idx)) = mnt_of_src else {
+            return ax_err!(InvalidInput, "cannot rename across mount points");
+        };
+        let Some((dst_path, dst_idx)) = mnt_of_dst else {
+            return ax_err!(InvalidInput, "cannot rename across mount points");
+        };
+        if src_idx != dst_idx {
+            return ax_err!(InvalidInput, "cannot rename across mount points");
+        }
+        self.mounts[src_idx].fs.root_dir().rename(src_path, dst_path)
     }
 }
 
